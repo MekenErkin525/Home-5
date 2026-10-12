@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Семейный бюджет на год</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef2f4;--card:#fff;--ink:#14232b;--mut:#5d6f78;--line:#d3dde2;--acc:#0b6e6e;--in:#1f7a45;--out:#b3402f;--r:10px}
+@media (prefers-color-scheme:dark){:root{--bg:#0f191e;--card:#17252c;--ink:#e6eef1;--mut:#8ea3ad;--line:#2b3d46;--acc:#3fb5b0;--in:#5cc88a;--out:#f08a77}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Onest,system-ui,Arial,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 14px 60px}
+h1{font-size:28px;margin:8px 0 4px}
+.sub{color:var(--mut);margin:0 0 14px}
+.yr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.yr b{font-size:22px;min-width:56px;text-align:center}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.tabs button{padding:6px 11px}
+.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.tabs button.has{border-color:var(--acc)}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:22px}
+.sum div{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.sum small{display:block;color:var(--mut);font-size:13px}
+.sum b{font-size:20px}
+.sum .bal{border:2px solid var(--acc)}
+section{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:18px}
+section h2{margin:0 0 10px;font-size:19px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+section h2 span{color:var(--acc)}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th{font-size:13px;font-weight:500;color:var(--mut);text-align:left;padding:4px 6px}
+td{padding:3px 4px}
+input{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:7px;padding:7px 8px}
+input:focus{outline:2px solid var(--acc);border-color:transparent}
+td.n input{text-align:right}
+button{font:inherit;cursor:pointer;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--ink);padding:7px 12px}
+button:hover{border-color:var(--acc)}
+button:focus-visible{outline:2px solid var(--acc)}
+.del{color:var(--out);padding:7px 10px}
+.add{margin-top:8px;background:var(--acc);color:#fff;border-color:var(--acc)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.note{color:var(--mut);font-size:13px;margin-top:14px}
+.ro td,.ro th{padding:6px 8px;border-bottom:1px solid var(--line)}
+.ro td.r,.ro th.r{text-align:right;white-space:nowrap}
+.ro tfoot td{font-weight:700;border-bottom:0}
+.ro.wide{min-width:900px}
+.dim{color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<h1>Семейный бюджет на год</h1>
+<p class="sub">Выберите месяц и заполните его. Все поля можно менять. Данные сохраняются в этом браузере.</p>
+<div class="yr"><button id="py" aria-label="Предыдущий год">←</button><b id="yl"></b><button id="ny" aria-label="Следующий год">→</button></div>
+<div class="tabs" id="tabs"></div>
+<div class="sum" id="sum"></div>
+<div id="app"></div>
+<div class="tools">
+  <button id="exp">Скачать данные (JSON)</button>
+  <button id="imp">Загрузить данные</button>
+  <button id="rst">Сбросить всё</button>
+  <input type="file" id="file" accept=".json" hidden>
+</div>
+<p class="note">Данные хранятся только в вашем браузере. Чтобы открыть их на другом устройстве, скачайте файл и загрузите там.</p>
+</main>
+<script>
+const KEY='family-budget-v2',OLD='family-budget-v1',CUR='₸';
+const MN=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const MS=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+const S=[
+ {k:'members',t:'Семья и доходы',sum:'income',add:'Добавить члена семьи',cols:[
+  {k:'name',l:'Имя',p:'Имя'},{k:'role',l:'Кто',p:'Папа, мама, сын…'},{k:'income',l:'Доход в месяц',n:1,p:'0'}]},
+ {k:'loans',t:'Кредиты',sum:'pay',add:'Добавить кредит',cols:[
+  {k:'name',l:'Название',p:'Ипотека, авто…'},{k:'bank',l:'Банк',p:'Банк'},{k:'owner',l:'На ком',p:'Имя'},
+  {k:'day',l:'День оплаты',n:1,p:'15'},{k:'pay',l:'Платёж в месяц',n:1,p:'0'}]},
+ {k:'utils',t:'Коммунальные услуги',sum:'amount',add:'Добавить услугу',cols:[
+  {k:'name',l:'Услуга'},{k:'provider',l:'Поставщик',p:'Организация'},{k:'acc',l:'Лицевой счёт',p:'№ счёта'},
+  {k:'amount',l:'Сумма за месяц',n:1,p:'0'}]},
+ {k:'other',t:'Другие расходы',sum:'amount',add:'Добавить расход',cols:[
+  {k:'name',l:'На что'},{k:'amount',l:'Сумма за месяц',n:1,p:'0'}]}
+];
+const def=()=>({
+ members:[1,2,3,4,5].map(i=>({name:'',role:i==1?'Папа':i==2?'Мама':'Ребёнок',income:''})),
+ loans:[{name:'',bank:'',owner:'',day:'',pay:''}],
+ utils:['Холодная вода','Горячая вода','Электричество','Вывоз мусора','Оплата за ОСИ'].map(n=>({name:n,provider:'',acc:'',amount:''})),
+ other:['Продукты','Транспорт','Связь и интернет','Учёба и кружки'].map(n=>({name:n,amount:''}))
+});
+const now=new Date();
+let D=null;
+try{D=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!D||!D.data){
+  D={data:{},year:now.getFullYear(),month:now.getMonth()};
+  try{const o=JSON.parse(localStorage.getItem(OLD));if(o&&o.members){D.data[D.year]=Array(12).fill(null);D.data[D.year][D.month]=o;}}catch(e){}
+}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}};
+const num=v=>parseFloat(String(v).replace(/\s/g,'').replace(',','.'))||0;
+const fmt=v=>Math.round(v).toLocaleString('ru-RU')+' '+CUR;
+const clone=o=>JSON.parse(JSON.stringify(o));
+const yr=y=>D.data[y]||(D.data[y]=Array(12).fill(null));
+function prevData(y,m){
+  for(let i=m-1;i>=0;i--)if(yr(y)[i])return yr(y)[i];
+  const py=D.data[y-1];
+  if(py)for(let i=11;i>=0;i--)if(py[i])return py[i];
+  return null;
+}
+function cur(){
+  const a=yr(D.year);
+  if(!a[D.month]){const p=prevData(D.year,D.month);a[D.month]=p?clone(p):def();save();}
+  return a[D.month];
+}
+const tot=(md,s)=>md?md[s.k].reduce((a,r)=>a+num(r[s.sum]),0):0;
+const calc=md=>{const i=tot(md,S[0]),l=tot(md,S[1]),u=tot(md,S[2]),o=tot(md,S[3]);return{i,l,u,o,b:i-l-u-o}};
+const balC=b=>b<0?'var(--out)':'var(--in)';
+
+function sumCards(c,label){
+  document.getElementById('sum').innerHTML=
+   `<div><small>Доходы</small><b style="color:var(--in)">${fmt(c.i)}</b></div>
+    <div><small>Кредиты</small><b>${fmt(c.l)}</b></div>
+    <div><small>Коммунальные</small><b>${fmt(c.u)}</b></div>
+    <div><small>Другие расходы</small><b>${fmt(c.o)}</b></div>
+    <div class="bal"><small>${label}</small><b style="color:${balC(c.b)}">${fmt(c.b)}</b></div>`;
+}
+function tabs(){
+  let h='';
+  MS.forEach((m,i)=>h+=`<button data-m="${i}" class="${D.month===i?'on':''} ${(D.data[D.year]||[])[i]?'has':''}">${m}</button>`);
+  h+=`<button data-m="12" class="${D.month===12?'on':''}">Итог за год</button>`;
+  document.getElementById('tabs').innerHTML=h;
+  document.getElementById('yl').textContent=D.year;
+}
+function totalsMonth(){
+  const md=cur();sumCards(calc(md),'Остаток за месяц');
+  S.forEach(s=>{const e=document.getElementById('t-'+s.k);if(e)e.textContent=fmt(tot(md,s))});
+}
+function renderMonth(){
+  const md=cur(),app=document.getElementById('app');app.innerHTML='';
+  const hd=document.createElement('div');
+  hd.innerHTML=`<h2 style="margin:0 0 12px;font-size:22px">${MN[D.month]} ${D.year}</h2>`;
+  app.appendChild(hd);
+  S.forEach(s=>{
+    const sec=document.createElement('section');
+    let h=`<h2>${s.t}<span id="t-${s.k}"></span></h2><div class="wrap"><table><thead><tr>`;
+    s.cols.forEach(c=>h+=`<th${c.n?' style="text-align:right"':''}>${c.l}</th>`);
+    h+='<th></th></tr></thead><tbody>';
+    md[s.k].forEach((r,i)=>{
+      h+='<tr>';
+      s.cols.forEach(c=>h+=`<td class="${c.n?'n':''}"><input data-s="${s.k}" data-i="${i}" data-c="${c.k}" ${c.n?'inputmode="decimal"':''} placeholder="${c.p||''}" aria-label="${c.l}" value="${String(r[c.k]??'').replace(/"/g,'&quot;')}"></td>`);
+      h+=`<td><button class="del" data-del="${s.k}" data-i="${i}" aria-label="Удалить строку" title="Удалить">✕</button></td></tr>`;
+    });
+    h+=`</tbody></table></div><button class="add" data-add="${s.k}">+ ${s.add}</button>`;
+    sec.innerHTML=h;app.appendChild(sec);
+  });
+  const cp=document.createElement('div');
+  cp.innerHTML=`<button id="cp">Скопировать данные из предыдущего месяца</button>`;
+  app.appendChild(cp);
+  totalsMonth();
+}
+function matrix(s,title){
+  const names=[];const map={};
+  (D.data[D.year]||[]).forEach((md,m)=>{if(!md)return;md[s.k].forEach(r=>{
+    const n=(r.name||'').trim();if(!n)return;
+    if(!map[n]){map[n]=Array(12).fill(0);names.push(n);}
+    map[n][m]+=num(r[s.sum]);
+  })});
+  if(!names.length)return '';
+  let h=`<section><h2>${title}</h2><div class="wrap"><table class="ro wide"><thead><tr><th>Статья</th>`;
+  MS.forEach(m=>h+=`<th class="r">${m}</th>`);h+='<th class="r">Год</th></tr></thead><tbody>';
+  names.forEach(n=>{
+    const t=map[n].reduce((a,b)=>a+b,0);
+    h+=`<tr><td>${n}</td>`+map[n].map(v=>`<td class="r ${v?'':'dim'}">${v?Math.round(v).toLocaleString('ru-RU'):'–'}</td>`).join('')+`<td class="r"><b>${Math.round(t).toLocaleString('ru-RU')}</b></td></tr>`;
+  });
+  return h+'</tbody></table></div></section>';
+}
+function renderYear(){
+  const arr=D.data[D.year]||Array(12).fill(null);
+  const T={i:0,l:0,u:0,o:0,b:0};
+  let h=`<h2 style="margin:0 0 12px;font-size:22px">Итог за ${D.year} год</h2><section><div class="wrap"><table class="ro"><thead><tr><th>Месяц</th><th class="r">Доходы</th><th class="r">Кредиты</th><th class="r">Коммунальные</th><th class="r">Другое</th><th class="r">Остаток</th></tr></thead><tbody>`;
+  arr.forEach((md,m)=>{
+    if(!md){h+=`<tr class="dim"><td>${MN[m]}</td><td class="r" colspan="5">нет данных</td></tr>`;return;}
+    const c=calc(md);for(const k in T)T[k]+=c[k];
+    h+=`<tr><td>${MN[m]}</td><td class="r">${fmt(c.i)}</td><td class="r">${fmt(c.l)}</td><td class="r">${fmt(c.u)}</td><td class="r">${fmt(c.o)}</td><td class="r" style="color:${balC(c.b)}">${fmt(c.b)}</td></tr>`;
+  });
+  h+=`</tbody><tfoot><tr><td>Всего</td><td class="r">${fmt(T.i)}</td><td class="r">${fmt(T.l)}</td><td class="r">${fmt(T.u)}</td><td class="r">${fmt(T.o)}</td><td class="r" style="color:${balC(T.b)}">${fmt(T.b)}</td></tr></tfoot></table></div></section>`;
+  h+=matrix(S[1],'Кредиты по месяцам')+matrix(S[2],'Коммунальные услуги по месяцам')+matrix(S[3],'Другие расходы по месяцам');
+  document.getElementById('app').innerHTML=h;
+  sumCards(T,'Остаток за год');
+}
+function render(){tabs();D.month===12?renderYear():renderMonth();}
+
+document.addEventListener('input',e=>{
+  const t=e.target.dataset;if(!t.s)return;
+  cur()[t.s][t.i][t.c]=e.target.value;save();totalsMonth();
+});
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(t.dataset.m!==undefined){D.month=+t.dataset.m;save();render();}
+  if(t.dataset.add){const s=S.find(x=>x.k==t.dataset.add),r={};s.cols.forEach(c=>r[c.k]='');cur()[s.k].push(r);save();render();}
+  if(t.dataset.del){cur()[t.dataset.del].splice(+t.dataset.i,1);save();render();}
+  if(t.id==='cp'){
+    const p=prevData(D.year,D.month);
+    const a=yr(D.year);const keep=a[D.month];a[D.month]=null;
+    const src=prevData(D.year,D.month);a[D.month]=keep;
+    if(!src){alert('Нет предыдущего месяца с данными.');return;}
+    if(confirm('Заменить данные этого месяца данными из предыдущего?')){a[D.month]=clone(src);save();render();}
+  }
+});
+document.getElementById('py').onclick=()=>{D.year--;save();render();};
+document.getElementById('ny').onclick=()=>{D.year++;save();render();};
+document.getElementById('exp').onclick=()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(D,null,2)],{type:'application/json'}));
+  a.download='semeiny-byudzhet.json';a.click();
+};
+document.getElementById('imp').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{try{const j=JSON.parse(rd.result);if(!j.data)throw 0;D=j;save();render();}catch(x){alert('Не удалось прочитать файл. Выберите JSON, скачанный из этого сайта.')}};
+  rd.readAsText(f);
+};
+document.getElementById('rst').onclick=()=>{if(confirm('Удалить все данные за все годы и начать заново?')){D={data:{},year:now.getFullYear(),month:now.getMonth()};save();render();}};
+render();
+</script>
+</body>
+</html>
